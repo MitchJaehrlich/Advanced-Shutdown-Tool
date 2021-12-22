@@ -21,11 +21,19 @@ namespace Advanced_Shutdown_Tool
     public partial class MainWindow : Window
     {
         // Global Variables
-        string buttonClickedText = "Done. Click to cancel shutdown";
-        string buttonUnclickedText = "Schedule Shutdown";
+        readonly string buttonClickedText = "Done. Click to cancel shutdown";
+        readonly string buttonUnclickedText = "Schedule Shutdown";
         public MainWindow()
         {
             InitializeComponent();
+            InitializeControls();
+        }
+
+        private void InitializeControls()
+        {
+            dateTimePicker.DefaultValue = DateTime.Now.AddHours(1);
+            dateTimePicker.DisplayDefaultValueOnEmptyText = true;
+            dateTimePicker.Format = Xceed.Wpf.Toolkit.DateTimeFormat.ShortTime;
         }
 
         /// <summary>
@@ -33,26 +41,30 @@ namespace Advanced_Shutdown_Tool
         /// </summary>
         void StartShutdown()
         {
+            // show the user the shutdown has been scheduled by changing the button text
             btnScheduleShutdown.Content = buttonClickedText;
 
-            // Is a shutdown time sheculed
+            // Shutdown based on date/time
             if (chkStudownTime.IsChecked == true)
             {
-                string inputTime = txtTime.Text;
-                DateTime shutdownTime = new DateTime();
+                // get the time from the picker
+                DateTime? selectedTime = dateTimePicker.Value;
 
-                if (DateTime.TryParse(inputTime, out shutdownTime))
+                // ensure the time is valid and in the future
+                if (selectedTime.HasValue && (DateTime)selectedTime.Value > DateTime.Now)
                 {
-                    TimeSpan secondsUntilShutdown = ParseDateTimeLikeAHuman(shutdownTime);
+                    // get the seconds until the picked time and send the command to command prompt
+                    TimeSpan secondsUntilShutdown = ((DateTime)selectedTime).Subtract(DateTime.Now);
                     string cmdArgument = $"shutdown -s -t {(int)secondsUntilShutdown.TotalSeconds}";
-
                     RunCommand(cmdArgument);
                 }
+                // picked time is invalid or in the past
                 else
                 {
                     CancelShutdown();
                 }
             }
+            // no shutdown condition checkbox is checked
             else
             {
                 CancelShutdown();
@@ -64,8 +76,10 @@ namespace Advanced_Shutdown_Tool
         /// </summary>
         void CancelShutdown()
         {
+            // revert the button text to it's default
             btnScheduleShutdown.Content = buttonUnclickedText;
 
+            // see if the user wanted a time-based shutdown and cancel it via command prompt
             if (chkStudownTime.IsChecked == true)
             {
                 RunCommand("shutdown -a");
@@ -74,46 +88,27 @@ namespace Advanced_Shutdown_Tool
 
         void RunCommand(string arguments)
         {
+            // start a new command prompt process
             System.Diagnostics.Process cmd = new System.Diagnostics.Process
             {
                 StartInfo = new System.Diagnostics.ProcessStartInfo()
                 {
+                    // starts command prompt without showing the UI
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
                     FileName = "cmd.exe",
-                    Arguments = $"/C {arguments}",
+                    Arguments = $"/C {arguments}", // needs to start with '/C' before regular commands can be input
                     RedirectStandardError = true,
                     RedirectStandardOutput = true
                 }
             };
             cmd.Start();
-            //txtOutput.Text = arguments;
         }
 
         /// <summary>
-        /// Attempts to solve for date time formatted without specifying am or pm
+        /// Button for starting a shutdown schedule
         /// </summary>
-        TimeSpan ParseDateTimeLikeAHuman(DateTime input)
-        {
-            TimeSpan output = new TimeSpan();
-            output = input.Subtract(DateTime.Now);
-
-            // check to see if it was able to parse a time in the future
-            if (output.TotalMilliseconds < 0)
-            {
-                // try adding 12 hours incase military time wasn't used
-                output = output.Add(TimeSpan.FromHours(12));
-
-                if (output.TotalMilliseconds < 0)
-                {
-                    CancelShutdown();
-                    return TimeSpan.MaxValue;
-                }
-            }
-            return output;
-        }
-
         private void btnScheduleShutdown_Click(object sender, RoutedEventArgs e)
         {
             // is shutdown to be scheduled?
